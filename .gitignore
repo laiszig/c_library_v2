@@ -1,0 +1,23 @@
+# macOS
+.DS_Store
+
+# IDE (CLion / JetBrains)
+.idea/
+cmake-build-*/
+
+# CMake / build output
+build/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+
+# Compiled binaries / objects
+main
+build_mavlink_test
+mavlink_test
+*.o
+*.obj
+*.exe
+*.out
+*.a

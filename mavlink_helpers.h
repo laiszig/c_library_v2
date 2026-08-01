@@ -5,6 +5,7 @@
 #include "mavlink_types.h"
 #include "mavlink_conversions.h"
 #include <stdio.h>
+#include "aes.h"
 
 #ifndef MAVLINK_HELPER
 #define MAVLINK_HELPER
@@ -19,6 +20,8 @@
 #ifdef MAVLINK_USE_CXX_NAMESPACE
 namespace mavlink {
 #endif
+
+#define ENCRYPTION
 
 /*
  * Internal function to give access to the channel status for each channel
@@ -271,7 +274,17 @@ MAVLINK_HELPER uint16_t mavlink_finalize_message_buffer(mavlink_message_t* msg, 
 		buf[8] = (msg->msgid >> 8) & 0xFF;
 		buf[9] = (msg->msgid >> 16) & 0xFF;
 	}
-	
+
+#ifdef ENCRYPTION
+	if (msg->msgid != 0) {
+		uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
+		uint8_t iv[16]  = { 0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff };
+		struct AES_ctx ctx;
+		AES_init_ctx_iv(&ctx, key, iv);
+		AES_CTR_xcrypt_buffer(&ctx, (uint8_t *)_MAV_PAYLOAD_NON_CONST(msg), msg->len);
+	}
+#endif
+
 	uint16_t checksum = crc_calculate(&buf[1], header_len-1);
 	crc_accumulate_buffer(&checksum, _MAV_PAYLOAD(msg), msg->len);
 	crc_accumulate(crc_extra, &checksum);
@@ -366,6 +379,17 @@ MAVLINK_HELPER void _mav_finalize_message_chan_send(mavlink_channel_t chan, uint
             buf[9] = (msgid >> 16) & 0xFF;
         }
 	status->current_tx_seq++;
+
+#ifdef ENCRYPTION
+	if (msgid != 0) {
+		uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
+		uint8_t iv[16]  = { 0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff };
+		struct AES_ctx ctx;
+		AES_init_ctx_iv(&ctx, key, iv);
+		AES_CTR_xcrypt_buffer(&ctx, (uint8_t *)packet, length);
+	}
+#endif
+
 	checksum = crc_calculate((const uint8_t*)&buf[1], header_len);
 	crc_accumulate_buffer(&checksum, packet, length);
 	crc_accumulate(crc_extra, &checksum);
@@ -800,6 +824,15 @@ MAVLINK_HELPER uint8_t mavlink_frame_char_buffer(mavlink_message_t* rxmsg,
 				}
 			}
 			status->parse_state = MAVLINK_PARSE_STATE_IDLE;
+#ifdef ENCRYPTION
+			if (status->msg_received == MAVLINK_FRAMING_OK && rxmsg->msgid != 0) {
+				uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
+				uint8_t iv[16]  = { 0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff };
+				struct AES_ctx ctx;
+				AES_init_ctx_iv(&ctx, key, iv);
+				AES_CTR_xcrypt_buffer(&ctx, (uint8_t *)_MAV_PAYLOAD_NON_CONST(rxmsg), rxmsg->len);
+			}
+#endif
 			if (r_message != NULL) {
 				memcpy(r_message, rxmsg, sizeof(mavlink_message_t));
 			}
@@ -830,6 +863,15 @@ MAVLINK_HELPER uint8_t mavlink_frame_char_buffer(mavlink_message_t* rxmsg,
 			    status->msg_received = MAVLINK_FRAMING_BAD_SIGNATURE;
 			}
 			status->parse_state = MAVLINK_PARSE_STATE_IDLE;
+#ifdef ENCRYPTION
+			if (status->msg_received == MAVLINK_FRAMING_OK && rxmsg->msgid != 0) {
+				uint8_t key[16] = { 0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6, 0xab, 0xf7, 0x15, 0x88, 0x09, 0xcf, 0x4f, 0x3c };
+				uint8_t iv[16]  = { 0xf0, 0xf1, 0xf2, 0xf3, 0xf4, 0xf5, 0xf6, 0xf7, 0xf8, 0xf9, 0xfa, 0xfb, 0xfc, 0xfd, 0xfe, 0xff };
+				struct AES_ctx ctx;
+				AES_init_ctx_iv(&ctx, key, iv);
+				AES_CTR_xcrypt_buffer(&ctx, (uint8_t *)_MAV_PAYLOAD_NON_CONST(rxmsg), rxmsg->len);
+			}
+#endif
 			if (r_message !=NULL) {
 				memcpy(r_message, rxmsg, sizeof(mavlink_message_t));
 			}
